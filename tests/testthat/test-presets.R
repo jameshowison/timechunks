@@ -296,6 +296,84 @@ test_that("australia_semester: seq produces correct sequence", {
 })
 
 
+# Non-overlap property ----------------------------------------------------
+# For every preset, generate a multi-year sequence and assert that no period's
+# end_date >= the following period's start_date. This is the property that was
+# violated before the last-period end-date fix (Summer ended Dec-31, overlapping
+# with the next Fall that started Aug-23 of the same year).
+
+.check_no_overlap <- function(preset) {
+  use_chunk_preset(preset)
+  cal  <- default_chunk_calendar()
+  # Build the first-period code for the year-start period
+  ys_code <- tolower(vapply(cal$periods, `[[`, character(1), "code")[
+    vapply(cal$periods, `[[`, character(1), "name") == cal$year_start_period
+  ])
+  from <- time_chunk(paste0(ys_code, "25"))
+  to   <- time_chunk(paste0(ys_code, "28"))
+  s    <- seq(from, to)
+  starts <- start_date(s)
+  ends   <- end_date(s)
+  n      <- length(s)
+  # Every end must be strictly before the next period's start
+  overlapping <- which(ends[-n] >= starts[-1])
+  if (length(overlapping) > 0) {
+    bad <- overlapping[1]
+    stop(glue::glue(
+      "Overlap in preset '{preset}': period {bad} ",
+      "({format(ends[bad])}) >= period {bad+1} start ({format(starts[bad+1])})"
+    ))
+  }
+  invisible(TRUE)
+}
+
+test_that("no period overlaps in us_semester across 3 academic years", {
+  expect_no_error(.check_no_overlap("us_semester"))
+  restore()
+})
+
+test_that("no period overlaps in us_quarter across 3 academic years", {
+  expect_no_error(.check_no_overlap("us_quarter"))
+  restore()
+})
+
+test_that("no period overlaps in uk_terms across 3 academic years", {
+  expect_no_error(.check_no_overlap("uk_terms"))
+  restore()
+})
+
+test_that("no period overlaps in trimester across 3 academic years", {
+  expect_no_error(.check_no_overlap("trimester"))
+  restore()
+})
+
+test_that("no period overlaps in us_federal_fy across 3 academic years", {
+  expect_no_error(.check_no_overlap("us_federal_fy"))
+  restore()
+})
+
+test_that("no period overlaps in australia_semester across 3 academic years", {
+  expect_no_error(.check_no_overlap("australia_semester"))
+  restore()
+})
+
+test_that("no period overlaps in custom calendar", {
+  set_chunk_calendar(
+    periods = list(
+      list(name = "Q1", code = "q1", start_mmdd = "03-01"),
+      list(name = "Q2", code = "q2", start_mmdd = "06-01"),
+      list(name = "Q3", code = "q3", start_mmdd = "09-01"),
+      list(name = "Q4", code = "q4", start_mmdd = "12-01")
+    ),
+    year_start_period = "Q1"
+  )
+  from <- time_chunk("q125"); to <- time_chunk("q128")
+  s <- seq(from, to)
+  starts <- start_date(s); ends <- end_date(s); n <- length(s)
+  expect_true(all(ends[-n] < starts[-1]))
+  restore()
+})
+
 # yyyym_map explicit override ---------------------------------------------
 
 test_that("yyyym_map overrides automatic month resolution", {
