@@ -1,0 +1,236 @@
+# timechunks
+
+> Named time periods for R — academic semesters, fiscal quarters, and any domain-specific period system.
+
+**Status:** In development — not yet on CRAN.
+
+---
+
+## What it does
+
+`timechunks` gives you a proper R vector type for named periods that cross calendar year boundaries:
+
+```r
+library(timechunks)
+
+use_chunk_preset("us_semester")
+
+# Parse any common format
+time_chunk("fa26")          # code format
+time_chunk("Fall 2026")     # text format
+time_chunk(20268)           # YYYYM numeric (August 2026 → Fall 2026)
+
+# Sorting works chronologically (not alphabetically)
+sort(time_chunk(c("sp27", "fa26", "su27")))
+# Fall 2026, Spring 2027, Summer 2027
+
+# Survives dplyr operations intact
+df |> mutate(semester = time_chunk(raw_code))
+
+# Access metadata
+x <- time_chunk("fa26")
+start_date(x)   # 2026-08-23
+end_date(x)     # 2027-01-14
+mid_date(x)     # 2026-10-31
+chunk_ay(x)     # "2026-27"
+```
+
+---
+
+## Installation (Development)
+
+The package is not on CRAN. Install from GitHub once published there:
+
+```r
+# Install pak if you don't have it
+install.packages("pak")
+
+pak::pak("yourgithubhandle/timechunks")
+```
+
+Or install from a local clone:
+
+```r
+install.packages("path/to/timechunks", repos = NULL, type = "source")
+```
+
+---
+
+## Development Workflow
+
+### Setup
+
+```r
+# Install dev tools if needed
+install.packages(c("devtools", "usethis", "testthat", "roxygen2"))
+```
+
+Clone the repo and open the `.Rproj` file in RStudio, or `cd` into the directory in your terminal.
+
+### The Core Loop
+
+During development you **do not install the package**. Instead, use:
+
+```r
+devtools::load_all()   # Load all R/ files into your session (fast, ~1 second)
+```
+
+Run this every time you change a file in `R/`. It simulates having the package installed without actually installing it. Your changes are available immediately.
+
+```r
+# After editing R/parse.R:
+devtools::load_all()
+time_chunk("fa26")   # test your change
+```
+
+### Running Tests
+
+```r
+devtools::test()           # run all tests
+devtools::test_file("tests/testthat/test-parse.R")  # run one file
+```
+
+Tests live in `tests/testthat/`. Each file corresponds to a file in `R/`.
+
+### Checking Documentation
+
+```r
+devtools::document()   # regenerates NAMESPACE and man/ from roxygen2 comments
+devtools::check_man()  # validates documentation
+```
+
+### Full Package Check
+
+```r
+devtools::check()              # runs R CMD check
+devtools::check(cran = TRUE)   # stricter CRAN-level check
+```
+
+Run this before any pull request or release. Aim for 0 errors, 0 warnings, 0 notes.
+
+### Test Coverage
+
+```r
+install.packages("covr")
+covr::package_coverage()   # shows % coverage per file
+covr::report()             # opens HTML coverage report in browser
+```
+
+---
+
+## Quick Reference: devtools Commands
+
+| Task | Command |
+|------|---------|
+| Load package for interactive use | `devtools::load_all()` |
+| Run all tests | `devtools::test()` |
+| Rebuild documentation | `devtools::document()` |
+| Full package check | `devtools::check()` |
+| Install package locally | `devtools::install()` |
+| Build vignettes | `devtools::build_vignettes()` |
+
+---
+
+## Calendar Configuration
+
+The package supports any domain through calendar configuration:
+
+```r
+# Use a built-in preset
+use_chunk_preset("us_semester")     # Fall/Spring/Summer
+use_chunk_preset("us_quarter")      # Fall/Winter/Spring/Summer
+use_chunk_preset("uk_terms")        # Michaelmas/Lent/Easter
+use_chunk_preset("us_federal_fy")   # US federal fiscal year
+use_chunk_preset("australia_semester")
+
+# Or define your own
+set_chunk_calendar(
+  periods = list(
+    list(name = "Fall",   code = "fa", start_mmdd = "08-23"),
+    list(name = "Spring", code = "sp", start_mmdd = "01-15"),
+    list(name = "Summer", code = "su", start_mmdd = "06-01")
+  ),
+  year_start_period = "Fall"
+)
+```
+
+---
+
+## ggplot2 Integration
+
+`timechunks` does **not** provide custom ggplot2 scales. Instead, use helper functions to create explicit label and date columns — this is standard tidyverse practice and more debuggable.
+
+### Discrete (equal spacing)
+
+```r
+df |>
+  mutate(sem_fct = as_chunk_factor(semester, labels = "code")) |>
+  ggplot(aes(x = sem_fct, y = enrollment)) +
+  geom_col()
+```
+
+### Continuous (proportional spacing)
+
+```r
+df |>
+  mutate(
+    mid = mid_date(semester),
+    lbl = format(semester, style = "code")
+  ) |>
+  ggplot(aes(x = mid, y = enrollment)) +
+  geom_point() +
+  scale_x_date(breaks = ~.$mid, labels = ~.$lbl)
+```
+
+### Segment visualization (recommended — shows period duration)
+
+```r
+df |>
+  mutate(
+    x_start = start_date(semester),
+    x_end   = end_date(semester),
+    x_mid   = mid_date(semester),
+    lbl     = format(semester, style = "code")
+  ) |>
+  ggplot() +
+  geom_segment(
+    aes(x = x_start, xend = x_end,
+        y = enrollment, yend = enrollment,
+        color = lbl),
+    linewidth = 4
+  ) +
+  geom_point(aes(x = x_mid, y = enrollment)) +
+  geom_line(aes(x = x_mid, y = enrollment), linetype = "dashed") +
+  scale_x_date()
+```
+
+---
+
+## YYYYM Format
+
+Months 1–9 are 5 digits; months 10–12 are 6 digits:
+
+| Input | Month | Maps to |
+|-------|-------|---------|
+| `20261` | January 2026 | Spring 2026 |
+| `20268` | August 2026 | Fall 2026 |
+| `202611` | November 2026 | Fall 2026 |
+| `202612` | December 2026 | Fall 2026 |
+
+Use `yyyym_strict = TRUE` in `set_chunk_calendar()` to error on ambiguous mappings.
+
+---
+
+## Contributing
+
+1. Fork the repo
+2. Create a branch: `git checkout -b feature/your-feature`
+3. Make changes, run `devtools::load_all()` and `devtools::test()`
+4. Ensure `devtools::check()` is clean
+5. Submit a pull request
+
+---
+
+## License
+
+MIT
