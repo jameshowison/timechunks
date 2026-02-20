@@ -1,0 +1,194 @@
+---
+title: "ggplot2 Visualization with timechunks"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{ggplot2 Visualization with timechunks}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+library(timechunks)
+library(ggplot2)
+library(dplyr)
+```
+
+## Overview
+
+`timechunks` does **not** provide custom `ggplot2` scales. Instead, it gives
+you helper functions to create the label and date columns you pass to `ggplot2`
+directly. This is standard tidyverse practice: explicit columns are more
+debuggable and composable than hidden scale magic.
+
+There are three common visualization patterns:
+
+| Pattern | When to use | How |
+|---|---|---|
+| Discrete (equal spacing) | Comparing values across periods | `as_chunk_factor()` |
+| Continuous (proportional spacing) | Showing temporal distance | `mid_date()` + `scale_x_date()` |
+| Segment (duration-aware) | Showing period lengths | `start_date()` / `end_date()` + `geom_segment()` |
+
+---
+
+## Setup
+
+```{r data}
+use_chunk_preset("us_semester")
+
+# Example dataset: enrollment by semester
+enrollment <- data.frame(
+  semester = time_chunk(c("fa25", "sp26", "su26", "fa26", "sp27", "su27")),
+  enrolled = c(8200L, 7100L, 3400L, 8500L, 7300L, 3600L)
+)
+```
+
+---
+
+## Pattern 1: Discrete scale (equal spacing)
+
+Use `as_chunk_factor()` to convert `time_chunk` to an ordered factor. Each
+period gets equal horizontal space.
+
+```{r discrete}
+enrollment |>
+  mutate(semester_fct = as_chunk_factor(semester, labels = "code")) |>
+  ggplot(aes(x = semester_fct, y = enrolled)) +
+  geom_col(fill = "steelblue") +
+  labs(
+    title    = "Enrollment by Semester",
+    x        = NULL,
+    y        = "Enrolled students"
+  ) +
+  theme_minimal()
+```
+
+Use `labels = "name"` for human-readable labels:
+
+```{r discrete-name}
+enrollment |>
+  mutate(semester_fct = as_chunk_factor(semester, labels = "name")) |>
+  ggplot(aes(x = semester_fct, y = enrolled)) +
+  geom_col(fill = "steelblue") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+---
+
+## Pattern 2: Continuous scale (proportional spacing)
+
+Use `mid_date()` to place points at the temporal midpoint of each period,
+and `format()` for axis labels. Periods with different durations are spaced
+proportionally.
+
+```{r continuous}
+enrollment |>
+  mutate(
+    mid = mid_date(semester),
+    lbl = format(semester, style = "code")
+  ) |>
+  ggplot(aes(x = mid, y = enrolled)) +
+  geom_line(color = "steelblue") +
+  geom_point(color = "steelblue", size = 2) +
+  scale_x_date(
+    breaks = enrollment |> mutate(mid = mid_date(semester)) |> pull(mid),
+    labels = format(enrollment$semester, style = "code")
+  ) +
+  labs(
+    title = "Enrollment Over Time (Proportional Spacing)",
+    x     = NULL,
+    y     = "Enrolled students"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+---
+
+## Pattern 3: Segment visualization (duration-aware) — Recommended
+
+The segment pattern is the most informative: horizontal bars show actual
+period duration, so a 5-month Fall looks longer than a 2-month Summer.
+
+```{r segment}
+enrollment |>
+  mutate(
+    x_start = start_date(semester),
+    x_end   = end_date(semester),
+    x_mid   = mid_date(semester),
+    lbl     = format(semester, style = "code")
+  ) |>
+  ggplot() +
+  geom_segment(
+    aes(
+      x     = x_start,
+      xend  = x_end,
+      y     = enrolled,
+      yend  = enrolled,
+      color = lbl
+    ),
+    linewidth = 4,
+    alpha = 0.8
+  ) +
+  geom_point(aes(x = x_mid, y = enrolled), size = 2) +
+  geom_line(aes(x = x_mid, y = enrolled), linetype = "dashed", color = "grey40") +
+  scale_x_date(date_labels = "%b %Y", date_breaks = "6 months") +
+  labs(
+    title  = "Enrollment by Period (Duration-Aware)",
+    x      = NULL,
+    y      = "Enrolled students",
+    color  = "Period"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+---
+
+## Grouping by academic year
+
+`chunk_ay()` returns the academic year string, which you can use directly
+in `group_by()` or as a facet variable.
+
+```{r ay-facet}
+enrollment |>
+  mutate(
+    ay          = chunk_ay(semester),
+    semester_fct = as_chunk_factor(semester, labels = "name")
+  ) |>
+  ggplot(aes(x = semester_fct, y = enrolled, fill = ay)) +
+  geom_col() +
+  facet_wrap(~ay, scales = "free_x") +
+  labs(
+    title = "Enrollment by Academic Year",
+    x     = NULL,
+    y     = "Enrolled students",
+    fill  = "Academic Year"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+---
+
+## Arithmetic in plots: building sequences
+
+Use arithmetic to build complete axis ranges programmatically:
+
+```{r sequences}
+all_semesters <- seq(time_chunk("fa25"), time_chunk("su27"), by = 1L)
+
+data.frame(
+  semester = all_semesters,
+  enrolled = c(8200L, 7100L, 3400L, 8500L, 7300L, 3600L)
+) |>
+  mutate(semester_fct = as_chunk_factor(semester, labels = "code")) |>
+  ggplot(aes(x = semester_fct, y = enrolled)) +
+  geom_col(fill = "steelblue") +
+  labs(title = "Built with seq()", x = NULL, y = "Enrolled") +
+  theme_minimal()
+```

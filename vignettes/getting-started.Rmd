@@ -1,0 +1,259 @@
+---
+title: "Getting Started with timechunks"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting Started with timechunks}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+library(timechunks)
+```
+
+## What problem does this solve?
+
+Institutional data often uses named periods that cross calendar year boundaries:
+
+- `"Fall 2026"` runs from August 2026 to January 2027
+- `"fa26"`, `"20268"`, and `"2026-27_1_08_Fall"` all mean the same thing
+- Sorting `c("Spring 2027", "Fall 2026")` alphabetically gives the wrong order
+
+`timechunks` provides a proper R vector type for these periods: parses any
+common format, sorts chronologically, and survives all tidyverse operations.
+
+---
+
+## Setting up a calendar
+
+Every `timechunks` function reads from a session-wide calendar set with
+`use_chunk_preset()` or `set_chunk_calendar()`.
+
+```{r calendar-preset}
+# Built-in presets
+use_chunk_preset("us_semester")     # Fall / Spring / Summer
+# use_chunk_preset("us_quarter")    # Fall / Winter / Spring / Summer
+# use_chunk_preset("uk_terms")      # Michaelmas / Lent / Easter
+# use_chunk_preset("us_federal_fy") # Q1 / Q2 / Q3 / Q4
+# use_chunk_preset("australia_semester")
+
+default_chunk_calendar()$name
+```
+
+```{r calendar-custom, eval = FALSE}
+# Or define your own
+set_chunk_calendar(
+  periods = list(
+    list(name = "Fall",   code = "fa", start_mmdd = "08-23"),
+    list(name = "Spring", code = "sp", start_mmdd = "01-15"),
+    list(name = "Summer", code = "su", start_mmdd = "06-01")
+  ),
+  year_start_period = "Fall"
+)
+```
+
+---
+
+## Parsing
+
+`time_chunk()` accepts any of four input formats and dispatches automatically.
+
+```{r parsing}
+use_chunk_preset("us_semester")
+
+time_chunk("fa26")              # code format
+time_chunk("Fall 2026")         # text format (also "2026 Fall")
+time_chunk(20268L)              # YYYYM numeric: 5 digits = months 1-9
+time_chunk(202611L)             # YYYYM numeric: 6 digits = months 10-12
+time_chunk("2026-27_1_08_Fall") # composite key (round-trips from format())
+```
+
+All formats vectorize:
+
+```{r vectorized}
+time_chunk(c("fa26", "sp27", "su27"))
+```
+
+Sub-parsers are exported for explicit control:
+
+```{r sub-parsers, eval = FALSE}
+parse_chunk_code("fa26")
+parse_chunk_text("Fall 2026")
+parse_chunk_numeric(20268L)
+```
+
+---
+
+## Accessing fields
+
+All accessors return atomic vectors of the same length as the input.
+
+```{r accessors}
+x <- time_chunk(c("fa26", "sp27", "su27"))
+
+chunk_name(x)    # period name
+chunk_code(x)    # period code
+chunk_year(x)    # calendar year of start date
+chunk_ay(x)      # academic / fiscal year
+chunk_index(x)   # position within the year (1, 2, 3, ...)
+
+start_date(x)    # Date: period start
+end_date(x)      # Date: period end
+mid_date(x)      # Date: midpoint
+```
+
+---
+
+## Formatting
+
+```{r formatting}
+x <- time_chunk("fa26")
+
+format(x, style = "code")      # "fa26"
+format(x, style = "name")      # "Fall 2026"
+format(x, style = "ay")        # "2026-27"
+format(x, style = "key")       # "2026-27_1_08_Fall"  (sortable, round-trips)
+format(x, style = "iso_date")  # "2026-08-23"
+
+# Glue-style template
+format(x, style = "{ay} | {name}")
+```
+
+---
+
+## Sorting
+
+Sorting uses `start_date` as the comparison proxy, so `sort()` is always
+chronological regardless of label format.
+
+```{r sorting}
+x <- time_chunk(c("sp27", "su27", "fa26"))
+sort(x)
+```
+
+This works in `dplyr::arrange()` too:
+
+```{r arrange, message = FALSE}
+library(dplyr)
+
+data.frame(
+  semester   = time_chunk(c("sp27", "su27", "fa26")),
+  enrollment = c(7100L, 3400L, 8200L)
+) |>
+  arrange(semester)
+```
+
+---
+
+## Arithmetic
+
+Move forward or backward by integer numbers of periods:
+
+```{r arithmetic}
+time_chunk("fa26") + 1L   # Spring 2027
+time_chunk("fa26") + 2L   # Summer 2027
+time_chunk("fa26") + 3L   # Fall 2027 (wraps to next academic year)
+time_chunk("sp27") - 1L   # Fall 2026
+```
+
+Compute the distance between two periods:
+
+```{r distance}
+time_chunk("sp27") - time_chunk("fa26")   # 1L
+time_chunk("fa27") - time_chunk("fa26")   # 3L  (one full year)
+```
+
+Generate sequences:
+
+```{r seq}
+seq(time_chunk("fa26"), time_chunk("fa27"), by = 1L)
+```
+
+---
+
+## dplyr / tidyr integration
+
+`time_chunk` vectors are vctrs record objects and survive all tidyverse
+operations without data loss.
+
+```{r dplyr, message = FALSE}
+df <- data.frame(
+  raw        = c("fa26", "sp27", "su27", "fa27"),
+  enrollment = c(8200L, 7100L, 3400L, 8500L),
+  stringsAsFactors = FALSE
+)
+
+df |>
+  mutate(
+    semester = time_chunk(raw),
+    ay       = chunk_ay(semester)
+  ) |>
+  group_by(ay) |>
+  summarise(total = sum(enrollment))
+```
+
+---
+
+## rollup_to_ay()
+
+A convenience wrapper for the common "group by academic year" operation:
+
+```{r rollup}
+df2 <- data.frame(
+  semester   = time_chunk(c("fa26", "sp27", "su27", "fa27", "sp28")),
+  enrollment = c(8200L, 7100L, 3400L, 8500L, 7300L)
+)
+
+rollup_to_ay(df2, value_col = "enrollment", chunk_col = "semester")
+
+# Custom aggregation function
+rollup_to_ay(df2, "enrollment", "semester", fn = mean)
+```
+
+---
+
+## YYYYM format
+
+Five- and six-digit integers encode year and month. The month is mapped to the
+period that starts in that month (or the most recently started period):
+
+```{r yyyym}
+time_chunk(20261L)   # January 2026  -> Spring 2026
+time_chunk(20268L)   # August 2026   -> Fall 2026  (Fall starts Aug-23)
+time_chunk(202611L)  # November 2026 -> Fall 2026
+time_chunk(202701L)  # January 2027  -> Spring 2027
+```
+
+For strict disambiguation, set `yyyym_strict = TRUE` in `set_chunk_calendar()`.
+Any month that could map to multiple periods will error, prompting you to supply
+an explicit `yyyym_map`.
+
+---
+
+## ggplot2 integration
+
+See `vignette("ggplot2-visualization", package = "timechunks")` for a full
+walkthrough of discrete, continuous, and segment visualization patterns.
+
+Quick reference:
+
+```{r ggplot-ref, eval = FALSE}
+library(ggplot2)
+
+# Discrete scale (equal spacing per period)
+df |>
+  mutate(sem_fct = as_chunk_factor(semester, labels = "code")) |>
+  ggplot(aes(x = sem_fct, y = enrollment)) +
+  geom_col()
+
+# Continuous scale (proportional spacing by date)
+df |>
+  mutate(mid = mid_date(semester), lbl = format(semester, "code")) |>
+  ggplot(aes(x = mid, y = enrollment)) +
+  geom_line() +
+  scale_x_date()
+```

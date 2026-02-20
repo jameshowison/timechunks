@@ -1,0 +1,74 @@
+url: ~
+
+template:
+  bootstrap: 5
+
+home:
+  title: "timechunks — Named Time Periods for R"
+  description: >
+    A vector type for academic semesters, fiscal quarters, and any
+    domain-specific named period system.
+
+navbar:
+  structure:
+    left:  [intro, reference, articles]
+    right: [github]
+  components:
+    intro:
+      text: "Get started"
+      href: articles/getting-started.html
+    articles:
+      text: "Articles"
+      menu:
+        - text: "Getting started"
+          href: articles/getting-started.html
+        - text: "ggplot2 visualization"
+          href: articles/ggplot2-visualization.html
+
+reference:
+  - title: "Parsing"
+    desc: "Create `time_chunk` vectors from common input formats."
+    contents:
+      - time_chunk
+      - parse_chunk_code
+      - parse_chunk_text
+      - parse_chunk_numeric
+
+  - title: "Calendar configuration"
+    desc: "Set and inspect the active calendar."
+    contents:
+      - set_chunk_calendar
+      - use_chunk_preset
+      - default_chunk_calendar
+
+  - title: "Accessors"
+    desc: "Extract fields from `time_chunk` vectors."
+    contents:
+      - time_chunk_accessors
+
+  - title: "Formatting"
+    desc: "Convert `time_chunk` vectors to strings."
+    contents:
+      - format.time_chunk
+      - print.time_chunk
+
+  - title: "Arithmetic"
+    desc: "Move between periods and compute distances."
+    contents:
+      - "+.time_chunk"
+      - "-.time_chunk"
+      - seq.time_chunk
+
+  - title: "ggplot2 helpers"
+    desc: "Create ordered factors and date columns for plotting."
+    contents:
+      - as_chunk_factor
+
+  - title: "Aggregation"
+    desc: "Roll up period-level data to academic/fiscal year."
+    contents:
+      - rollup_to_ay
+
+  - title: "Type checks"
+    contents:
+      - is_time_chunk

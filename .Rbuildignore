@@ -1,0 +1,7 @@
+^\.claude$
+^_pkgdown\.yml$
+^docs$
+^README$
+^\.DS_Store$
+^.*\.Rproj$
+^\.Rproj\.user$
