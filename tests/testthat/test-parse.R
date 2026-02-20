@@ -270,9 +270,10 @@ test_that("end date = day before next period start for non-final period", {
   expect_equal(vctrs::field(x, "end_date"), as.Date("2027-01-14"))
 })
 
-test_that("end date = Dec 31 for final period in year", {
+test_that("end date of final period = day before year-start period restarts", {
   setup_semester()
-  # Summer 2027 is the last period in the us_semester calendar
+  # Summer 2027: last period; year-start is Fall (Aug-23).
+  # Fall 2027 starts Aug-23 > Jun-01, so end = Aug-22, 2027.
   x <- time_chunk("su27")
-  expect_equal(vctrs::field(x, "end_date"), as.Date("2027-12-31"))
+  expect_equal(vctrs::field(x, "end_date"), as.Date("2027-08-22"))
 })

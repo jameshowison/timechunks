@@ -9,8 +9,11 @@ vignette: >
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(
-  collapse = TRUE,
-  comment = "#>"
+  collapse  = TRUE,
+  comment   = "#>",
+  fig.width = 9,
+  fig.height = 4,
+  out.width = "100%"
 )
 library(timechunks)
 library(ggplot2)

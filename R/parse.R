@@ -385,7 +385,16 @@ parse_chunk_numeric <- function(x, calendar = default_chunk_calendar()) {
     }
     end_date <- next_start - 1L
   } else {
-    end_date <- as.Date(paste0(cal_year, "-12-31"))
+    # Last period in the calendar: end the day before the year-start period
+    # restarts. This prevents overlap when the year-start period begins
+    # mid-year (e.g. Fall starts Aug-23, so Summer must end Aug-22, not Dec-31).
+    period_names_all  <- vapply(calendar$periods, `[[`, character(1), "name")
+    ys_idx            <- which(period_names_all == calendar$year_start_period)
+    ys_period         <- calendar$periods[[ys_idx]]
+    ys_start_same     <- as.Date(paste0(cal_year,       "-", ys_period$start_mmdd))
+    ys_start_next     <- as.Date(paste0(cal_year + 1L,  "-", ys_period$start_mmdd))
+    next_ys_start     <- if (ys_start_same > start_date) ys_start_same else ys_start_next
+    end_date          <- next_ys_start - 1L
   }
 
   ay <- .compute_ay(calendar, period$name, cal_year)

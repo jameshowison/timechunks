@@ -49,7 +49,7 @@ test_that("us_quarter: Summer 2027", {
   x <- time_chunk("su27")
   expect_equal(chunk_name(x),      "Summer")
   expect_equal(start_date(x),      as.Date("2027-06-20"))
-  expect_equal(end_date(x),        as.Date("2027-12-31"))  # last period in year
+  expect_equal(end_date(x),        as.Date("2027-09-19"))  # day before Fall Sep-20
   expect_equal(chunk_ay(x),        "2026-27")
   restore()
 })
@@ -127,7 +127,7 @@ test_that("uk_terms: Easter 2027 AY stays 2026-27", {
   x <- time_chunk("ea27")
   expect_equal(chunk_name(x),   "Easter")
   expect_equal(start_date(x),   as.Date("2027-04-22"))
-  expect_equal(end_date(x),     as.Date("2027-12-31"))
+  expect_equal(end_date(x),     as.Date("2027-09-30"))  # day before Michaelmas Oct-01
   expect_equal(chunk_ay(x),     "2026-27")
   restore()
 })
@@ -176,7 +176,7 @@ test_that("trimester: Spring 2027 AY", {
   x <- time_chunk("sp27")
   expect_equal(chunk_name(x),   "Spring")
   expect_equal(start_date(x),   as.Date("2027-04-01"))
-  expect_equal(end_date(x),     as.Date("2027-12-31"))
+  expect_equal(end_date(x),     as.Date("2027-08-31"))  # day before Fall Sep-01
   expect_equal(chunk_ay(x),     "2026-27")
   restore()
 })
@@ -257,7 +257,7 @@ test_that("australia_semester: Semester 2 2026 AY is '2026'", {
   x <- time_chunk("s226")
   expect_equal(chunk_name(x),   "Semester 2")
   expect_equal(start_date(x),   as.Date("2026-07-22"))
-  expect_equal(end_date(x),     as.Date("2026-12-31"))
+  expect_equal(end_date(x),     as.Date("2027-02-21"))  # day before Semester 1 Feb-22
   expect_equal(chunk_ay(x),     "2026")
   restore()
 })
