@@ -252,7 +252,7 @@ revenue |>
   ) |>
   ggplot(aes(x = season_fct, y = revenue, fill = chunk_name(season))) +
   geom_col() +
-  facet_wrap(~fy, scales = "free_x") +
+  facet_grid(. ~ fy, scales = "free_x", space = "free_x") +
   labs(
     title = "Revenue by Season and Fiscal Year",
     x     = NULL,
