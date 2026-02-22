@@ -188,23 +188,44 @@ academic_only
 
 ## dplyr / tidyr integration
 
-`time_chunk` vectors are vctrs record objects and survive all tidyverse
-operations without data loss.
+`time_chunk` vectors are vctrs record objects and survive tidyverse operations
+intact — `filter()`, `arrange()`, `mutate()`, and `pivot_longer()` all return
+a column that is still a `time_chunk` with all fields accessible.
+
+The `arrange()` case is the most telling: the rows come back in chronological
+order even though alphabetical order would give a different result
+(`"fa26" < "fa27" < "sp27" < "su27"` alphabetically vs.
+`fa26 → sp27 → su27 → fa27` chronologically).
 
 ```{r dplyr, message = FALSE}
+# Start with a time_chunk column already in the data frame
 df <- data.frame(
-  raw        = c("fa26", "sp27", "su27", "fa27"),
-  enrollment = c(8200L, 7100L, 3400L, 8500L),
-  stringsAsFactors = FALSE
+  semester   = time_chunk(c("su27", "fa26", "fa27", "sp27")),
+  enrollment = c(3400L, 8200L, 8500L, 7100L)
 )
 
+# Pass through filter → arrange → mutate; semester is still a time_chunk
+result <- df |>
+  filter(chunk_name(semester) != "Summer") |>  # drop Summer rows
+  arrange(semester) |>                          # sort chronologically
+  mutate(mid = mid_date(semester))              # access fields on the column
+
+result
+
+# Confirm: still a time_chunk after all three operations
+is_time_chunk(result$semester)
+```
+
+`pivot_longer()` also preserves the column when it stays in place:
+
+```{r pivot, message = FALSE}
+library(tidyr)
+
 df |>
-  mutate(
-    semester = time_chunk(raw),
-    ay       = chunk_ay(semester)
-  ) |>
-  group_by(ay) |>
-  summarise(total = sum(enrollment))
+  mutate(enrollment_k = enrollment / 1000) |>
+  pivot_longer(c(enrollment, enrollment_k), names_to = "metric", values_to = "value") |>
+  select(semester, metric, value) |>
+  arrange(semester)
 ```
 
 ---
