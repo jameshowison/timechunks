@@ -195,7 +195,7 @@ test_that("seq errors when by = 0", {
 
 test_that("seq works with us_federal_fy (4-period calendar)", {
   use_chunk_preset("us_federal_fy")
-  s <- seq(time_chunk("q126"), time_chunk("q127"), by = 1L)
+  s <- seq(time_chunk("q1fy26"), time_chunk("q1fy27"), by = 1L)
   expect_length(s, 5L)
   expect_equal(chunk_name(s), c("Q1", "Q2", "Q3", "Q4", "Q1"))
   use_chunk_preset("us_semester")

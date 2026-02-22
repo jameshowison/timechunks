@@ -91,8 +91,8 @@ test_that("as_chunk_factor() works correctly before group_by() (not inside group
   skip_if_not_installed("dplyr")
   use_chunk_preset("us_federal_fy")
   df <- data.frame(
-    quarter   = time_chunk(c("q126", "q227", "q327", "q427",
-                              "q127", "q228", "q328", "q428")),
+    quarter   = time_chunk(c("q1fy26", "q2fy27", "q3fy27", "q4fy27",
+                              "q1fy27", "q2fy28", "q3fy28", "q4fy28")),
     obligated = c(12.4, 18.1, 22.7, 9.8, 14.2, 19.5, 24.1, 11.3)
   )
   result <- df |>
@@ -103,6 +103,6 @@ test_that("as_chunk_factor() works correctly before group_by() (not inside group
     dplyr::ungroup()
   expect_true(is.ordered(result$quarter_fct))
   expect_equal(nrow(result), 8L)
-  expect_equal(levels(result$quarter_fct), c("q126", "q227", "q327", "q427",
-                                              "q127", "q228", "q328", "q428"))
+  expect_equal(levels(result$quarter_fct), c("q1fy26", "q2fy27", "q3fy27", "q4fy27",
+                                              "q1fy27", "q2fy28", "q3fy28", "q4fy28"))
 })

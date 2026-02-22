@@ -55,10 +55,10 @@
 
   us_federal_fy = list(
     periods = list(
-      list(name = "Q1", code = "q1", start_mmdd = "10-01"),
-      list(name = "Q2", code = "q2", start_mmdd = "01-01"),
-      list(name = "Q3", code = "q3", start_mmdd = "04-01"),
-      list(name = "Q4", code = "q4", start_mmdd = "07-01")
+      list(name = "Q1", code = "q1fy", start_mmdd = "10-01"),
+      list(name = "Q2", code = "q2fy", start_mmdd = "01-01"),
+      list(name = "Q3", code = "q3fy", start_mmdd = "04-01"),
+      list(name = "Q4", code = "q4fy", start_mmdd = "07-01")
     ),
     year_start_period = "Q1",
     yyyym_strict = FALSE,

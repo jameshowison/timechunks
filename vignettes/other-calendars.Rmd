@@ -44,15 +44,21 @@ Q1 begins October 1. A note on naming convention: `timechunks` labels the
 year by when it starts — the quarter beginning October 1, 2026 has
 `chunk_ay()` of `"2026-27"`. The US government calls this FY2027.
 
+The codes follow the industry-standard `Q1FY26` convention (lowercase:
+`q1fy26`). A convenient side-effect: within a fiscal year the codes sort
+alphabetically in the correct order (`q1fy < q2fy < q3fy < q4fy`).
+Across years you still need `timechunks` chronological sorting, since
+`q4fy26` would sort after `q1fy27` alphabetically.
+
 ```{r fy-parse}
 # Parsing works the same way as semesters
-time_chunk("q126")   # Q1 starting Oct 2026
-time_chunk("q227")   # Q2 starting Jan 2027
-time_chunk(202610L)  # YYYYM: October 2026 → Q1
+time_chunk("q1fy26")   # Q1 starting Oct 2026
+time_chunk("q2fy27")   # Q2 starting Jan 2027
+time_chunk(202610L)    # YYYYM: October 2026 → Q1
 ```
 
 ```{r fy-dates}
-x <- time_chunk(c("q126", "q227", "q327", "q427"))
+x <- time_chunk(c("q1fy26", "q2fy27", "q3fy27", "q4fy27"))
 data.frame(
   period     = format(x, style = "name"),
   start      = start_date(x),
@@ -68,8 +74,8 @@ and show the cumulative spend against an annual target.
 
 ```{r fy-budget}
 budget <- data.frame(
-  quarter    = time_chunk(c("q126", "q227", "q327", "q427",
-                             "q127", "q228", "q328", "q428")),
+  quarter    = time_chunk(c("q1fy26", "q2fy27", "q3fy27", "q4fy27",
+                             "q1fy27", "q2fy28", "q3fy28", "q4fy28")),
   obligated  = c(12.4, 18.1, 22.7, 9.8,
                  14.2, 19.5, 24.1, 11.3),  # $M
   target     = rep(c(63, 69), each = 4)
@@ -108,13 +114,13 @@ budget |>
 
 ```{r fy-arithmetic}
 # One quarter forward
-time_chunk("q126") + 1L   # Q2 (Jan 2027)
+time_chunk("q1fy26") + 1L   # Q2 (Jan 2027)
 
 # Distance between quarters
-time_chunk("q427") - time_chunk("q126")   # 3L — three quarters apart
+time_chunk("q4fy27") - time_chunk("q1fy26")   # 3L — three quarters apart
 
 # Full fiscal year sequence
-seq(time_chunk("q126"), time_chunk("q427"))
+seq(time_chunk("q1fy26"), time_chunk("q4fy27"))
 ```
 
 ---

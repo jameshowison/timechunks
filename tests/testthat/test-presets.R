@@ -195,7 +195,7 @@ test_that("us_federal_fy: 4 quarters, year starts Q1", {
 
 test_that("us_federal_fy: Q1 2026 dates (Oct 2026 start)", {
   use_chunk_preset("us_federal_fy")
-  x <- time_chunk("q126")
+  x <- time_chunk("q1fy26")
   expect_equal(chunk_name(x),   "Q1")
   expect_equal(start_date(x),   as.Date("2026-10-01"))
   expect_equal(end_date(x),     as.Date("2026-12-31"))  # day before Q2 Jan-01
@@ -205,15 +205,15 @@ test_that("us_federal_fy: Q1 2026 dates (Oct 2026 start)", {
 
 test_that("us_federal_fy: Q2 through Q4 share AY 2026-27", {
   use_chunk_preset("us_federal_fy")
-  expect_equal(chunk_ay(time_chunk("q227")), "2026-27")  # Jan 2027
-  expect_equal(chunk_ay(time_chunk("q327")), "2026-27")  # Apr 2027
-  expect_equal(chunk_ay(time_chunk("q427")), "2026-27")  # Jul 2027
+  expect_equal(chunk_ay(time_chunk("q2fy27")), "2026-27")  # Jan 2027
+  expect_equal(chunk_ay(time_chunk("q3fy27")), "2026-27")  # Apr 2027
+  expect_equal(chunk_ay(time_chunk("q4fy27")), "2026-27")  # Jul 2027
   restore()
 })
 
 test_that("us_federal_fy: arithmetic 4 quarters per year", {
   use_chunk_preset("us_federal_fy")
-  x <- time_chunk("q126")
+  x <- time_chunk("q1fy26")
   expect_equal(chunk_name(x + 1L), "Q2")
   expect_equal(chunk_name(x + 2L), "Q3")
   expect_equal(chunk_name(x + 3L), "Q4")
