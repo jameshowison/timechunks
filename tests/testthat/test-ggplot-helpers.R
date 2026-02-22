@@ -82,3 +82,27 @@ test_that("as_chunk_factor() works correctly in dplyr::mutate()", {
   expect_true(is.ordered(df$sem_fct))
   expect_equal(levels(df$sem_fct), c("fa26", "sp27", "su27"))
 })
+
+test_that("as_chunk_factor() works correctly before group_by() (not inside grouped mutate)", {
+  # Regression: calling as_chunk_factor() inside a grouped mutate() caused a
+  # vctrs incompatible combine error because dplyr processes each group
+  # separately and then tries to combine factors with differing levels.
+  # The fix is to call as_chunk_factor() before group_by().
+  skip_if_not_installed("dplyr")
+  use_chunk_preset("us_federal_fy")
+  df <- data.frame(
+    quarter   = time_chunk(c("q126", "q227", "q327", "q427",
+                              "q127", "q228", "q328", "q428")),
+    obligated = c(12.4, 18.1, 22.7, 9.8, 14.2, 19.5, 24.1, 11.3)
+  )
+  result <- df |>
+    dplyr::arrange(quarter) |>
+    dplyr::mutate(quarter_fct = as_chunk_factor(quarter, labels = "code")) |>
+    dplyr::group_by(ay = chunk_ay(quarter)) |>
+    dplyr::mutate(cumulative = cumsum(obligated)) |>
+    dplyr::ungroup()
+  expect_true(is.ordered(result$quarter_fct))
+  expect_equal(nrow(result), 8L)
+  expect_equal(levels(result$quarter_fct), c("q126", "q227", "q327", "q427",
+                                              "q127", "q228", "q328", "q428"))
+})
