@@ -1,7 +1,9 @@
 ^\.claude$
 ^_pkgdown\.yml$
 ^docs$
-^README$
+^README\.md$
 ^\.DS_Store$
 ^.*\.Rproj$
 ^\.Rproj\.user$
+^doc$
+^Meta$

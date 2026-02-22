@@ -1,8 +1,12 @@
 # timechunks
 
-> Named time periods for R — academic semesters, fiscal quarters, and any domain-specific period system.
+> Named time periods for R — academic semesters, fiscal quarters, and any repeating domain-specific period system.
 
 **Status:** In development — not yet on CRAN.
+
+`timechunks` is designed for **repeating annual cycles**: period systems where
+the same named periods recur every year (Fall/Spring/Summer, Q1–Q4, Michaelmas/Lent/Easter).
+If your named periods do not repeat — see [Non-repeating periods](#non-repeating-periods) below.
 
 ---
 
@@ -218,6 +222,54 @@ Months 1–9 are 5 digits; months 10–12 are 6 digits:
 | `202612` | December 2026 | Fall 2026 |
 
 Use `yyyym_strict = TRUE` in `set_chunk_calendar()` to error on ambiguous mappings.
+
+---
+
+## Non-repeating periods
+
+`timechunks` requires a repeating annual cycle. For named periods that occur
+only once — generational cohorts, historical eras, project phases — the same
+sorting and labeling problems apply, but a plain data frame with an ordered
+factor is sufficient:
+
+```r
+library(dplyr)
+library(ggplot2)
+
+generations <- data.frame(
+  name  = c("Greatest", "Silent", "Boomers", "Gen X", "Millennials", "Gen Z"),
+  start = as.Date(c("1901-01-01", "1928-01-01", "1946-01-01",
+                    "1965-01-01", "1981-01-01", "1997-01-01")),
+  end   = as.Date(c("1927-12-31", "1945-12-31", "1964-12-31",
+                    "1980-12-31", "1996-12-31", "2012-12-31"))
+) |>
+  mutate(
+    # Ordered factor preserves chronological order in plots and arrange()
+    name_fct = factor(name, levels = name, ordered = TRUE),
+    # Midpoint: useful for label placement on a continuous date axis
+    mid      = start + (as.integer(end - start) %/% 2L)
+  )
+
+# Discrete axis (equal spacing) — sort order comes from the factor levels
+generations |>
+  mutate(span_years = as.integer(end - start) %/% 365L) |>
+  ggplot(aes(x = name_fct, y = span_years)) +
+  geom_col() +
+  labs(x = NULL, y = "Years")
+
+# Continuous axis (proportional spacing) — segments show true duration
+generations |>
+  ggplot() +
+  geom_segment(aes(x = start, xend = end, y = name_fct, yend = name_fct),
+               linewidth = 6, color = "steelblue") +
+  geom_text(aes(x = mid, y = name_fct, label = name_fct), size = 3) +
+  scale_x_date() +
+  labs(x = NULL, y = NULL)
+```
+
+The key moves are the same as for repeating periods: define explicit
+`start`/`end`/`mid` columns, use an ordered factor for the name, and let
+ggplot2 handle the rest.
 
 ---
 
