@@ -235,13 +235,16 @@ first. The codes round-trip back to `time_chunk` via `time_chunk()` when
 you pivot long again.
 
 ```{r pivot-wider, message = FALSE}
+# Data arrives out of order and includes Summer
 dept_df <- data.frame(
-  dept     = c("Engineering", "Engineering", "Liberal Arts", "Liberal Arts"),
-  semester = time_chunk(c("fa26", "sp27", "fa26", "sp27")),
-  n        = c(1200L, 1100L, 800L, 750L)
+  dept     = rep(c("Engineering", "Liberal Arts"), each = 3),
+  semester = time_chunk(c("sp27", "su26", "fa26",
+                           "su26", "sp27", "fa26")),
+  n        = c(1100L, 400L, 1200L, 320L, 750L, 800L)
 )
 
-# Long → wide: semester codes become column names
+# Long → wide: format to codes first, then spread
+# Column order in the wide table reflects input order (su26, sp27, fa26 etc.)
 wide <- dept_df |>
   mutate(sem = format(semester, style = "code")) |>
   select(-semester) |>
@@ -249,31 +252,87 @@ wide <- dept_df |>
 
 wide
 
-# Wide → long: parse codes back to time_chunk
+# Wide → long: codes parse back to time_chunk; arrange() sorts chronologically
+# (su26 → fa26 → sp27), not alphabetically (fa26 → sp27 → su26)
 wide |>
   pivot_longer(-dept, names_to = "sem", values_to = "n") |>
   mutate(semester = time_chunk(sem)) |>
   select(-sem) |>
-  arrange(semester)
+  arrange(dept, semester)
 ```
 
 ---
 
-## rollup_to_ay()
+## Time series operations
 
-A convenience wrapper for the common "group by academic year" operation:
+Because `time_chunk` sorts chronologically via its vctrs proxy, standard
+tidyverse time series patterns work without any special wrappers. The
+progression below builds from simple aggregation up to rolling windows.
 
-```{r rollup}
-df2 <- data.frame(
-  semester   = time_chunk(c("fa26", "sp27", "su27", "fa27", "sp28")),
-  enrollment = c(8200L, 7100L, 3400L, 8500L, 7300L)
+```{r ts-setup, message = FALSE}
+# Five semesters of enrollment data
+ts_df <- data.frame(
+  semester   = time_chunk(c("fa25", "sp26", "su26", "fa26", "sp27",
+                             "su27", "fa27", "sp28")),
+  enrollment = c(8100L, 7000L, 3100L, 8400L, 7200L, 3300L, 8600L, 7400L)
 )
-
-rollup_to_ay(df2, value_col = "enrollment", chunk_col = "semester")
-
-# Custom aggregation function
-rollup_to_ay(df2, "enrollment", "semester", fn = mean)
 ```
+
+### 1. Group by academic year
+
+`chunk_ay()` gives a plain character column you can pass straight to
+`group_by()`:
+
+```{r ts-group}
+ts_df |>
+  group_by(ay = chunk_ay(semester)) |>
+  summarise(total = sum(enrollment), .groups = "drop")
+```
+
+### 2. Cumulative enrollment
+
+`arrange(semester)` sorts rows chronologically; `cumsum()` then runs in the
+right order:
+
+```{r ts-cumsum}
+ts_df |>
+  arrange(semester) |>
+  mutate(cumulative = cumsum(enrollment))
+```
+
+### 3. Semester-over-semester change
+
+`lag()` looks back one row. Because the data is sorted by `semester`, "one
+row back" means "one period back":
+
+```{r ts-lag}
+ts_df |>
+  arrange(semester) |>
+  mutate(
+    change  = enrollment - lag(enrollment),
+    pct_chg = round(change / lag(enrollment) * 100, 1)
+  )
+```
+
+### 4. Rolling mean with `slider`
+
+`slider::slide_dbl()` applies a function over a sliding window of rows.
+After `arrange(semester)` the rows are in period order, so a window of
+3 rows is a 3-period rolling mean:
+
+```{r ts-rolling, message = FALSE}
+library(slider)
+
+ts_df |>
+  arrange(semester) |>
+  mutate(
+    roll3 = slide_dbl(enrollment, mean, .before = 2, .complete = TRUE)
+  )
+```
+
+`.before = 2` means "this row plus the 2 before it" (3-period window).
+`.complete = TRUE` returns `NA` for the first two rows where a full window
+is not yet available, rather than a partial mean.
 
 ---
 
