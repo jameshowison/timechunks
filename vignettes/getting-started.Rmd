@@ -218,13 +218,42 @@ is_time_chunk(result$semester)
 
 `pivot_longer()` also preserves the column when it stays in place:
 
-```{r pivot, message = FALSE}
+```{r pivot-longer, message = FALSE}
 library(tidyr)
 
 df |>
   mutate(enrollment_k = enrollment / 1000) |>
   pivot_longer(c(enrollment, enrollment_k), names_to = "metric", values_to = "value") |>
   select(semester, metric, value) |>
+  arrange(semester)
+```
+
+### Wide tables for sharing
+
+`pivot_wider()` requires text column names, so format `semester` to codes
+first. The codes round-trip back to `time_chunk` via `time_chunk()` when
+you pivot long again.
+
+```{r pivot-wider, message = FALSE}
+dept_df <- data.frame(
+  dept     = c("Engineering", "Engineering", "Liberal Arts", "Liberal Arts"),
+  semester = time_chunk(c("fa26", "sp27", "fa26", "sp27")),
+  n        = c(1200L, 1100L, 800L, 750L)
+)
+
+# Long → wide: semester codes become column names
+wide <- dept_df |>
+  mutate(sem = format(semester, style = "code")) |>
+  select(-semester) |>
+  pivot_wider(names_from = sem, values_from = n)
+
+wide
+
+# Wide → long: parse codes back to time_chunk
+wide |>
+  pivot_longer(-dept, names_to = "sem", values_to = "n") |>
+  mutate(semester = time_chunk(sem)) |>
+  select(-sem) |>
   arrange(semester)
 ```
 
