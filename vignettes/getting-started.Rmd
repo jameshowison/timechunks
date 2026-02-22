@@ -59,6 +59,29 @@ set_chunk_calendar(
 )
 ```
 
+To rename a period — some institutions use "Winter" where others use
+"Spring" — just change the `name` and `code` fields and keep the same
+`start_mmdd`:
+
+```{r calendar-rename}
+set_chunk_calendar(
+  periods = list(
+    list(name = "Fall",   code = "fa", start_mmdd = "08-23"),
+    list(name = "Winter", code = "wi", start_mmdd = "01-15"),
+    list(name = "Summer", code = "su", start_mmdd = "06-01")
+  ),
+  year_start_period = "Fall"
+)
+
+time_chunk("wi27")               # parses "Winter 2027"
+time_chunk("Winter 2027")        # text format works too
+time_chunk("wi27") + 1L          # → Summer 2027
+```
+
+```{r calendar-rename-reset, include = FALSE}
+use_chunk_preset("us_semester")
+```
+
 ---
 
 ## Parsing
