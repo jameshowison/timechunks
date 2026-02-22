@@ -176,6 +176,14 @@ Generate sequences:
 seq(time_chunk("fa26"), time_chunk("fa27"), by = 1L)
 ```
 
+Filter a sequence with standard subsetting — for example, drop all Summer terms:
+
+```{r seq-filter}
+all_terms <- seq(time_chunk("fa25"), time_chunk("fa27"), by = 1L)
+academic_only <- all_terms[chunk_name(all_terms) != "Summer"]
+academic_only
+```
+
 ---
 
 ## dplyr / tidyr integration
