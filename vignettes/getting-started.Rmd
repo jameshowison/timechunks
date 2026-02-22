@@ -93,8 +93,8 @@ use_chunk_preset("us_semester")
 
 time_chunk("fa26")              # code format
 time_chunk("Fall 2026")         # text format (also "2026 Fall")
-time_chunk(20268L)              # YYYYM numeric: 5 digits = months 1-9
-time_chunk(202611L)             # YYYYM numeric: 6 digits = months 10-12
+time_chunk(20268)              # YYYYM numeric: 5 digits = months 1-9
+time_chunk(202611)             # YYYYM numeric: 6 digits = months 10-12
 time_chunk("2026-27_1_08_Fall") # composite key (round-trips from format())
 ```
 
@@ -365,10 +365,10 @@ Five- and six-digit integers encode year and month. The month is mapped to the
 period that starts in that month (or the most recently started period):
 
 ```{r yyyym}
-time_chunk(20261L)   # January 2026  -> Spring 2026
-time_chunk(20268L)   # August 2026   -> Fall 2026  (Fall starts Aug-23)
-time_chunk(202611L)  # November 2026 -> Fall 2026
-time_chunk(202701L)  # January 2027  -> Spring 2027
+time_chunk(20261)   # January 2026  -> Spring 2026
+time_chunk(20268)   # August 2026   -> Fall 2026  (Fall starts Aug-23)
+time_chunk(202611)  # November 2026 -> Fall 2026
+time_chunk(202701)  # January 2027  -> Spring 2027
 ```
 
 For strict disambiguation, set `yyyym_strict = TRUE` in `set_chunk_calendar()`.

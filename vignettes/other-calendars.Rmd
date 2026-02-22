@@ -54,7 +54,7 @@ Across years you still need `timechunks` chronological sorting, since
 # Parsing works the same way as semesters
 time_chunk("q1fy26")   # Q1 starting Oct 2026
 time_chunk("q2fy27")   # Q2 starting Jan 2027
-time_chunk(202610L)    # YYYYM: October 2026 → Q1
+time_chunk(202610)    # YYYYM: October 2026 → Q1
 ```
 
 ```{r fy-dates}
