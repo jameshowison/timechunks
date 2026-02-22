@@ -1,0 +1,286 @@
+---
+title: "Beyond Semesters: Fiscal Years, Terms, and Custom Calendars"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Beyond Semesters: Fiscal Years, Terms, and Custom Calendars}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse  = TRUE,
+  comment   = "#>",
+  fig.width = 9,
+  fig.height = 4,
+  out.width = "100%"
+)
+library(timechunks)
+library(dplyr)
+library(ggplot2)
+```
+
+## Overview
+
+The calendar is just configuration. Every parsing, formatting, sorting,
+arithmetic, and ggplot2 pattern from the getting-started vignette works
+identically regardless of which calendar is active. This vignette shows
+three non-semester examples:
+
+1. **US Federal Fiscal Year** — quarterly budget data
+2. **UK Academic Terms** — Michaelmas / Lent / Easter
+3. **Custom: Retail Seasons** — a fully user-defined repeating calendar
+
+---
+
+## 1. US Federal Fiscal Year
+
+```{r fy-setup}
+use_chunk_preset("us_federal_fy")
+default_chunk_calendar()$periods |> lapply(`[`, c("name", "code", "start_mmdd"))
+```
+
+Q1 begins October 1. A note on naming convention: `timechunks` labels the
+year by when it starts — the quarter beginning October 1, 2026 has
+`chunk_ay()` of `"2026-27"`. The US government calls this FY2027.
+
+```{r fy-parse}
+# Parsing works the same way as semesters
+time_chunk("q126")   # Q1 starting Oct 2026
+time_chunk("q227")   # Q2 starting Jan 2027
+time_chunk(202610L)  # YYYYM: October 2026 → Q1
+```
+
+```{r fy-dates}
+x <- time_chunk(c("q126", "q227", "q327", "q427"))
+data.frame(
+  period     = format(x, style = "name"),
+  start      = start_date(x),
+  end        = end_date(x),
+  ay         = chunk_ay(x)
+)
+```
+
+### Budget execution example
+
+A common federal reporting pattern: track obligations quarter by quarter
+and show the cumulative spend against an annual target.
+
+```{r fy-budget}
+budget <- data.frame(
+  quarter    = time_chunk(c("q126", "q227", "q327", "q427",
+                             "q127", "q228", "q328", "q428")),
+  obligated  = c(12.4, 18.1, 22.7, 9.8,
+                 14.2, 19.5, 24.1, 11.3),  # $M
+  target     = rep(c(63, 69), each = 4)
+)
+
+budget |>
+  arrange(quarter) |>
+  group_by(ay = chunk_ay(quarter)) |>
+  mutate(cumulative = cumsum(obligated),
+         pct_target = round(cumulative / target * 100, 1)) |>
+  select(quarter = quarter, obligated, cumulative, pct_target, ay)
+```
+
+```{r fy-plot}
+budget |>
+  arrange(quarter) |>
+  mutate(quarter_fct = as_chunk_factor(quarter, labels = "code")) |>
+  group_by(ay = chunk_ay(quarter)) |>
+  mutate(cumulative = cumsum(obligated)) |>
+  ungroup() |>
+  ggplot(aes(x = quarter_fct, y = cumulative, group = ay, color = ay)) +
+  geom_line() +
+  geom_point(aes(y = obligated), shape = 1, size = 3) +
+  geom_hline(aes(yintercept = target, color = ay), linetype = "dashed") +
+  labs(
+    title  = "Cumulative Obligations by Fiscal Year",
+    x      = NULL,
+    y      = "Obligations ($M)",
+    color  = "AY",
+    caption = "Solid line: cumulative. Open circles: quarterly. Dashed: annual target."
+  ) +
+  theme_minimal()
+```
+
+### Arithmetic and sequences
+
+```{r fy-arithmetic}
+# One quarter forward
+time_chunk("q126") + 1L   # Q2 (Jan 2027)
+
+# Distance between quarters
+time_chunk("q427") - time_chunk("q126")   # 3L — three quarters apart
+
+# Full fiscal year sequence
+seq(time_chunk("q126"), time_chunk("q427"))
+```
+
+---
+
+## 2. UK Academic Terms
+
+```{r uk-setup}
+use_chunk_preset("uk_terms")
+```
+
+Three terms per year: Michaelmas (Oct), Lent (Jan), Easter (Apr).
+
+```{r uk-parse}
+time_chunk("mi26")   # Michaelmas 2026
+time_chunk("le27")   # Lent 2027
+time_chunk("ea27")   # Easter 2027
+
+x <- time_chunk(c("mi26", "le27", "ea27"))
+data.frame(
+  term  = format(x, style = "name"),
+  start = start_date(x),
+  end   = end_date(x),
+  ay    = chunk_ay(x)
+)
+```
+
+### Research output example
+
+UK universities often track research metrics by term. Michaelmas typically
+has the highest activity (new academic year, grant renewals); Easter the
+lowest (exams, vacations).
+
+```{r uk-data}
+research <- data.frame(
+  term       = time_chunk(c("mi25", "le26", "ea26",
+                             "mi26", "le27", "ea27")),
+  papers     = c(41L, 28L, 19L, 45L, 31L, 22L),
+  grants     = c(8L,  5L,  3L,  9L,  6L,  4L)
+)
+```
+
+```{r uk-sort}
+# Sorting works chronologically, not alphabetically
+# (alphabetical would give: ea, le, mi — wrong)
+research |> arrange(term)
+```
+
+```{r uk-plot}
+research |>
+  arrange(term) |>
+  mutate(
+    term_fct = as_chunk_factor(term, labels = "name"),
+    ay       = chunk_ay(term)
+  ) |>
+  ggplot(aes(x = term_fct, y = papers, fill = ay)) +
+  geom_col() +
+  labs(
+    title = "Research Papers by Term",
+    x     = NULL,
+    y     = "Papers published",
+    fill  = "Academic year"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 20, hjust = 1))
+```
+
+```{r uk-lag}
+# Semester-over-semester change in grant activity
+research |>
+  arrange(term) |>
+  mutate(grant_change = grants - lag(grants))
+```
+
+---
+
+## 3. Custom Calendar: Retail Seasons
+
+Any repeating named-period system can be configured with
+`set_chunk_calendar()`. Here a retailer uses four seasons with a fiscal
+year that starts in Spring (February):
+
+```{r retail-setup}
+set_chunk_calendar(
+  periods = list(
+    list(name = "Spring",  code = "sp", start_mmdd = "02-01"),
+    list(name = "Summer",  code = "su", start_mmdd = "05-01"),
+    list(name = "Fall",    code = "fa", start_mmdd = "08-01"),
+    list(name = "Holiday", code = "ho", start_mmdd = "11-01")
+  ),
+  year_start_period = "Spring",
+  name              = "retail"
+)
+```
+
+Everything works immediately — no other setup required.
+
+```{r retail-parse}
+time_chunk("sp26")   # Spring 2026
+time_chunk("ho26")   # Holiday 2026
+
+x <- time_chunk(c("sp26", "su26", "fa26", "ho26"))
+data.frame(
+  season = format(x, style = "name"),
+  start  = start_date(x),
+  end    = end_date(x),
+  fy     = chunk_ay(x)
+)
+```
+
+```{r retail-data}
+revenue <- data.frame(
+  season  = time_chunk(c("ho25", "sp26", "su26", "fa26",
+                          "ho26", "sp27", "su27", "fa27")),
+  revenue = c(4.8, 2.1, 2.6, 3.1,
+              5.2, 2.3, 2.8, 3.4)   # $M
+)
+```
+
+```{r retail-ts}
+# Lag by 4 periods = same season prior year (YoY comparison)
+revenue |>
+  arrange(season) |>
+  mutate(
+    yoy_change = revenue - lag(revenue, 4L),
+    yoy_pct    = round(yoy_change / lag(revenue, 4L) * 100, 1)
+  )
+```
+
+```{r retail-plot}
+revenue |>
+  arrange(season) |>
+  mutate(
+    season_fct = as_chunk_factor(season, labels = "name"),
+    fy         = chunk_ay(season)
+  ) |>
+  ggplot(aes(x = season_fct, y = revenue, fill = chunk_name(season))) +
+  geom_col() +
+  facet_wrap(~fy, scales = "free_x") +
+  labs(
+    title = "Revenue by Season and Fiscal Year",
+    x     = NULL,
+    y     = "Revenue ($M)",
+    fill  = "Season"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 20, hjust = 1))
+```
+
+```{r retail-arithmetic}
+# Arithmetic works the same as any other calendar
+time_chunk("sp26") + 1L   # Summer 2026
+time_chunk("ho26") + 1L   # Spring 2027 (wraps to next FY)
+time_chunk("ho26") - time_chunk("sp26")   # 3 seasons apart
+
+seq(time_chunk("sp26"), time_chunk("fa27"))
+```
+
+---
+
+## Switching calendars in a session
+
+`use_chunk_preset()` and `set_chunk_calendar()` replace the active calendar
+immediately. All subsequent `time_chunk()` calls use the new calendar.
+Data already parsed under a previous calendar retains its fields — it is
+self-contained in the vctrs record.
+
+```{r switching}
+use_chunk_preset("us_semester")   # back to semesters for the rest of the session
+```

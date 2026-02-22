@@ -24,6 +24,8 @@ navbar:
           href: articles/getting-started.html
         - text: "ggplot2 visualization"
           href: articles/ggplot2-visualization.html
+        - text: "Beyond semesters"
+          href: articles/other-calendars.html
 
 reference:
   - title: "Parsing"
