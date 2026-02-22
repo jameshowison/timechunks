@@ -243,9 +243,9 @@ dept_df <- data.frame(
   n        = c(1100L, 400L, 1200L, 320L, 750L, 800L)
 )
 
-# Long → wide: format to codes first, then spread
-# Column order in the wide table reflects input order (su26, sp27, fa26 etc.)
+# Long → wide: sort chronologically first so column order is chronological
 wide <- dept_df |>
+  arrange(semester) |>
   mutate(sem = format(semester, style = "code")) |>
   select(-semester) |>
   pivot_wider(names_from = sem, values_from = n)
