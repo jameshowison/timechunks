@@ -20,6 +20,7 @@ Suggests:
     dplyr,
     tidyr,
     ggplot2,
+    forcats,
     slider,
     covr,
     knitr,

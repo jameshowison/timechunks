@@ -26,6 +26,8 @@ navbar:
           href: articles/ggplot2-visualization.html
         - text: "Beyond semesters"
           href: articles/other-calendars.html
+        - text: "Period reference table"
+          href: articles/period-table.html
 
 reference:
   - title: "Parsing"

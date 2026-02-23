@@ -1,0 +1,286 @@
+---
+title: "The Period Reference Table Approach"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{The Period Reference Table Approach}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse  = TRUE,
+  comment   = "#>",
+  fig.width = 9,
+  fig.height = 4,
+  out.width = "100%"
+)
+library(dplyr)
+library(ggplot2)
+library(forcats)
+```
+
+## The core idea
+
+The sorting, labeling, and date-conversion problems that arise with named
+periods all stem from the same root cause: the period code or name stored in
+your data carries no information about chronological position, start date, or
+display format. The solution in any tool is the same — maintain a small
+**period reference table** that supplies those missing fields, then join your
+data against it.
+
+This approach requires no specialized packages. It works in R, Excel, Python,
+SQL, or any environment that supports a table join or lookup. `timechunks`
+solves the same problems through a purpose-built vector type; this vignette
+shows the complementary plain-table approach that works everywhere.
+
+---
+
+## The reference table
+
+The reference table has one row per period and is filled in once from your
+institution's calendar:
+
+```{r periods}
+periods <- data.frame(
+  sort_key   = 1:6,
+  code       = c("fa25", "sp26", "su26", "fa26", "sp27", "su27"),
+  name       = c("Fall 2025", "Spring 2026", "Summer 2026",
+                 "Fall 2026", "Spring 2027", "Summer 2027"),
+  ay         = c("2025-26", "2025-26", "2025-26",
+                 "2026-27", "2026-27", "2026-27"),
+  start_date = as.Date(c("2025-08-23", "2026-01-15", "2026-06-01",
+                          "2026-08-23", "2027-01-15", "2027-06-01")),
+  end_date   = as.Date(c("2026-01-14", "2026-05-31", "2026-08-22",
+                          "2027-01-14", "2027-05-31", "2027-08-22")),
+  stringsAsFactors = FALSE
+)
+periods$mid_date <- periods$start_date +
+  as.integer(periods$end_date - periods$start_date) %/% 2L
+
+periods
+```
+
+The columns:
+
+- **sort_key** — a plain integer; sorting by this produces chronological order
+  in any tool
+- **code** — the short identifier in your source data; the join key
+- **name** — the human-readable label for reports and figures
+- **ay** — the academic/fiscal year grouping
+- **start_date / end_date** — the actual calendar dates
+- **mid_date** — halfway between start and end; used for label placement on
+  continuous axes
+
+---
+
+## Synonym columns
+
+Source data rarely arrives in a single format. The same period may appear as
+`fa26` in one system and `202608` or `Fall 2026` in another. Add a column for
+each representation that appears in your source systems:
+
+```{r synonyms}
+periods$yyyym  <- c(202508L, 202601L, 202606L, 202608L, 202701L, 202706L)
+periods$name_long <- periods$name  # could differ: "Autumn 2026", etc.
+```
+
+Join on whichever synonym column matches the source data. After the join,
+all subsequent work uses the canonical columns.
+
+---
+
+## The pattern in three steps
+
+**Step 1 — Join.** Attach the reference table to your data.
+**Step 2 — Sort.** Sort by `sort_key`.
+**Step 3 — Display.** Use `name` for labels, `mid_date` for date-axis position.
+
+```{r sample-data}
+# Typical source data: period codes and a metric
+enrollments <- data.frame(
+  code       = c("sp27", "fa26", "su26", "fa25", "sp26", "su27"),
+  enrollment = c(7100L, 8200L, 3400L, 8000L, 6900L, 3200L),
+  stringsAsFactors = FALSE
+)
+```
+
+```{r join-sort}
+df <- enrollments |>
+  left_join(periods, by = "code") |>
+  arrange(sort_key)
+
+df |> select(name, sort_key, enrollment, mid_date)
+```
+
+The data is now in chronological order with human-readable labels and dates
+attached — without any package-specific vector type.
+
+---
+
+## Discrete axis (equal spacing)
+
+### Base R factor
+
+Sort first, then build the factor from the already-ordered `name` column so
+the levels are locked in:
+
+```{r discrete-base}
+df_base <- df |>
+  mutate(name_fct = factor(name, levels = unique(name), ordered = TRUE))
+
+ggplot(df_base, aes(x = name_fct, y = enrollment)) +
+  geom_col(fill = "steelblue") +
+  labs(title = "Enrollment by Semester (discrete axis, base factor)",
+       x = NULL, y = "Enrollment") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 20, hjust = 1))
+```
+
+### forcats::fct_reorder
+
+`fct_reorder()` sets factor levels by the values of a second variable, so no
+prior `arrange()` is needed — the ordering information travels with the data:
+
+```{r discrete-forcats}
+df_fct <- enrollments |>
+  left_join(periods, by = "code") |>
+  mutate(name_fct = fct_reorder(name, sort_key))
+
+ggplot(df_fct, aes(x = name_fct, y = enrollment)) +
+  geom_col(fill = "steelblue") +
+  labs(title = "Enrollment by Semester (discrete axis, fct_reorder)",
+       x = NULL, y = "Enrollment") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 20, hjust = 1))
+```
+
+`fct_reorder()` is the tidyverse-idiomatic choice: it is explicit about what
+drives the order (`sort_key`) and works correctly even if the data frame is
+later filtered or shuffled.
+
+---
+
+## Continuous axis (proportional spacing)
+
+Use `mid_date` as the x-position and `name` as the text label:
+
+```{r continuous}
+ggplot(df, aes(x = mid_date, y = enrollment)) +
+  geom_line(color = "steelblue") +
+  geom_point(color = "steelblue", size = 3) +
+  geom_text(aes(label = name), vjust = -0.8, size = 3) +
+  scale_x_date(date_labels = "%b %Y") +
+  labs(title = "Enrollment by Semester (continuous date axis)",
+       x = NULL, y = "Enrollment") +
+  theme_minimal()
+```
+
+The gap between Summer 2026 (ends Aug 22) and Fall 2026 (starts Aug 23) is
+nearly invisible here, but with more irregular calendars the proportional
+spacing makes gaps and overlaps visible automatically.
+
+---
+
+## Grouping by academic year
+
+The `ay` column from the reference table gives a plain character grouping
+variable ready for `group_by()` or `facet_wrap()`:
+
+```{r ay-group}
+df |>
+  group_by(ay) |>
+  summarise(total = sum(enrollment), .groups = "drop")
+```
+
+```{r ay-facet}
+df |>
+  mutate(name_fct = fct_reorder(name, sort_key)) |>
+  ggplot(aes(x = name_fct, y = enrollment, fill = ay)) +
+  geom_col() +
+  facet_wrap(~ay, scales = "free_x") +
+  labs(title = "Enrollment by Academic Year",
+       x = NULL, y = "Enrollment", fill = "AY") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 20, hjust = 1),
+        legend.position = "none")
+```
+
+---
+
+## In Excel {.tabset}
+
+The same pattern in Excel uses XLOOKUP (Excel 365) or VLOOKUP (older):
+
+```{r excel-xlookup, eval = FALSE}
+# In your data sheet, add helper columns:
+# =XLOOKUP(A2, periods[code], periods[sort_key])   → sort_key
+# =XLOOKUP(A2, periods[code], periods[name])        → name
+# =XLOOKUP(A2, periods[code], periods[mid_date])    → mid_date
+
+# With VLOOKUP (always use FALSE for exact match):
+# =VLOOKUP(A2, periods, 2, FALSE)   → sort_key (column 2)
+# =VLOOKUP(A2, periods, 3, FALSE)   → name     (column 3)
+```
+
+Sort the data sheet by the `sort_key` column. In the chart's Select Data
+dialog, point the horizontal axis labels at the `name` column. The chart
+displays "Fall 2026", "Spring 2027", etc. in chronological order.
+
+For a date axis, use `mid_date` as the x-values of the series and attach
+labels via Format Data Labels → Value from Cells → select the `name` column.
+
+---
+
+## In Python (pandas)
+
+```{python pandas, eval = FALSE}
+import pandas as pd
+
+# Join
+df = data.merge(periods, on="code", how="left").sort_values("sort_key")
+
+# Discrete axis: ordered Categorical controls plot order
+df["name"] = pd.Categorical(
+    df["name"],
+    categories=df["name"].unique(),  # already in sort_key order
+    ordered=True
+)
+
+import seaborn as sns
+sns.barplot(data=df, x="name", y="enrollment")
+```
+
+---
+
+## In SQL
+
+```{sql sql, eval = FALSE}
+SELECT
+    d.*,
+    p.sort_key,
+    p.name,
+    p.mid_date,
+    p.ay
+FROM data d
+LEFT JOIN periods p ON d.code = p.code
+ORDER BY p.sort_key;
+```
+
+Results arrive pre-sorted with human-readable labels attached, ready for any
+reporting tool that consumes the query.
+
+---
+
+## What this approach does not solve
+
+The reference table must be built and maintained. Someone must define the
+period dates, compute the midpoints, and extend the table when new periods
+are added. The approach also does not prevent a colleague from sorting by the
+`name` column instead of `sort_key`, or from creating a chart before the join
+has been applied.
+
+These are coordination problems, not technical ones. The table approach makes
+correct behavior straightforward; it cannot make incorrect behavior impossible.
+For an approach that makes chronological sorting automatic and enforced,
+see the `time_chunk` vector type in this package.

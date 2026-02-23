@@ -149,13 +149,29 @@ data |>
 
 **Human-readable labels in ggplot2.** For a discrete axis, convert `name`
 to an ordered factor whose levels follow `sort_key` order — this locks in
-the correct axis sequence regardless of data order:
+the correct axis sequence regardless of data order.
+
+Base R:
 
 ```r
 data |>
   left_join(periods, by = "code") |>
   arrange(sort_key) |>
   mutate(name_fct = factor(name, levels = unique(name), ordered = TRUE)) |>
+  ggplot(aes(x = name_fct, y = value)) +
+  geom_col()
+```
+
+With `forcats` (tidyverse): `fct_reorder()` sets factor levels by the values
+of a second variable, so the levels of `name` are ordered by `sort_key`
+without an explicit `arrange()` first:
+
+```r
+library(forcats)
+
+data |>
+  left_join(periods, by = "code") |>
+  mutate(name_fct = fct_reorder(name, sort_key)) |>
   ggplot(aes(x = name_fct, y = value)) +
   geom_col()
 ```
