@@ -1,0 +1,380 @@
+---
+title: "The Period Reference Table Approach"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## The core idea
+
+The sorting, labeling, and date-conversion problems that arise with named
+periods all stem from the same root cause: the period code or name stored in
+your data carries no information about chronological position, start date, or
+display format. The solution in any tool is the same — maintain a small
+**period reference table** that supplies those missing fields, then join your
+data against it.
+
+This document shows the pattern in R, Python, SQL, Excel, and Tableau.
+
+---
+
+## The reference table
+
+The reference table has one row per period. Every column is derived from your
+institution's calendar rules and filled in once.
+
+| sort_key | code  | name        | ay      | start_date | end_date   | mid_date   |
+|----------|-------|-------------|---------|------------|------------|------------|
+| 1        | fa25  | Fall 2025   | 2025-26 | 2025-08-23 | 2026-01-14 | 2025-10-31 |
+| 2        | sp26  | Spring 2026 | 2025-26 | 2026-01-15 | 2026-05-31 | 2026-03-23 |
+| 3        | su26  | Summer 2026 | 2025-26 | 2026-06-01 | 2026-08-22 | 2026-07-12 |
+| 4        | fa26  | Fall 2026   | 2026-27 | 2026-08-23 | 2027-01-14 | 2026-10-31 |
+| 5        | sp27  | Spring 2027 | 2026-27 | 2027-01-15 | 2027-05-31 | 2027-03-23 |
+| 6        | su27  | Summer 2027 | 2026-27 | 2027-06-01 | 2027-08-22 | 2027-07-12 |
+
+The columns:
+
+- **sort_key** — plain integer; sort by this to get chronological order
+- **code** — short identifier in source data; the join key
+- **name** — human-readable label for reports and figures
+- **ay** — academic/fiscal year grouping
+- **start_date / end_date** — actual calendar dates
+- **mid_date** — midpoint, used for label placement on continuous axes
+
+**Synonym columns** handle source data that arrives in multiple formats. Add
+a column for each representation that appears in your source systems
+(`yyyym_start`, `source_system_key`, etc.) and join on whichever one matches.
+
+---
+
+## In R
+
+```{r r-setup}
+library(dplyr)
+library(ggplot2)
+library(forcats)
+
+periods <- data.frame(
+  sort_key   = 1:6,
+  code       = c("fa25", "sp26", "su26", "fa26", "sp27", "su27"),
+  name       = c("Fall 2025", "Spring 2026", "Summer 2026",
+                 "Fall 2026", "Spring 2027", "Summer 2027"),
+  ay         = c("2025-26", "2025-26", "2025-26",
+                 "2026-27", "2026-27", "2026-27"),
+  start_date = as.Date(c("2025-08-23", "2026-01-15", "2026-06-01",
+                          "2026-08-23", "2027-01-15", "2027-06-01")),
+  end_date   = as.Date(c("2026-01-14", "2026-05-31", "2026-08-22",
+                          "2027-01-14", "2027-05-31", "2027-08-22")),
+  stringsAsFactors = FALSE
+)
+periods$mid_date <- periods$start_date +
+  as.integer(periods$end_date - periods$start_date) %/% 2L
+
+# Source data arrives out of order
+enrollments <- data.frame(
+  code       = c("sp27", "fa26", "su26", "fa25", "sp26", "su27"),
+  enrollment = c(7100L, 8200L, 3400L, 8000L, 6900L, 3200L),
+  stringsAsFactors = FALSE
+)
+```
+
+### Join and sort
+
+```{r r-join}
+df <- enrollments |>
+  left_join(periods, by = "code") |>
+  arrange(sort_key)
+
+df |> select(name, sort_key, enrollment, mid_date)
+```
+
+### Discrete axis — base R factor
+
+Sort first so `unique(name)` returns levels in chronological order:
+
+```{r r-discrete-base}
+df |>
+  mutate(name_fct = factor(name, levels = unique(name), ordered = TRUE)) |>
+  ggplot(aes(x = name_fct, y = enrollment)) +
+  geom_col(fill = "steelblue") +
+  labs(title = "Discrete axis — base factor", x = NULL, y = "Enrollment") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 20, hjust = 1))
+```
+
+### Discrete axis — forcats
+
+`fct_reorder()` encodes the sort order into the factor directly, so the plot
+is correct regardless of row order in the data frame:
+
+```{r r-discrete-forcats}
+enrollments |>
+  left_join(periods, by = "code") |>
+  mutate(name_fct = fct_reorder(name, sort_key)) |>
+  ggplot(aes(x = name_fct, y = enrollment)) +
+  geom_col(fill = "steelblue") +
+  labs(title = "Discrete axis — fct_reorder", x = NULL, y = "Enrollment") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 20, hjust = 1))
+```
+
+### Continuous date axis
+
+```{r r-continuous}
+df |>
+  ggplot(aes(x = mid_date, y = enrollment)) +
+  geom_line(color = "steelblue") +
+  geom_point(color = "steelblue", size = 3) +
+  geom_text(aes(label = name), vjust = -0.8, size = 3) +
+  scale_x_date(date_labels = "%b %Y") +
+  labs(title = "Continuous date axis", x = NULL, y = "Enrollment") +
+  theme_minimal()
+```
+
+---
+
+## In Python
+
+```{python py-setup}
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+
+periods = pd.DataFrame({
+    "sort_key"  : range(1, 7),
+    "code"      : ["fa25", "sp26", "su26", "fa26", "sp27", "su27"],
+    "name"      : ["Fall 2025", "Spring 2026", "Summer 2026",
+                   "Fall 2026", "Spring 2027", "Summer 2027"],
+    "ay"        : ["2025-26"] * 3 + ["2026-27"] * 3,
+    "start_date": pd.to_datetime(["2025-08-23", "2026-01-15", "2026-06-01",
+                                   "2026-08-23", "2027-01-15", "2027-06-01"]),
+    "end_date"  : pd.to_datetime(["2026-01-14", "2026-05-31", "2026-08-22",
+                                   "2027-01-14", "2027-05-31", "2027-08-22"]),
+})
+periods["mid_date"] = periods["start_date"] + (
+    periods["end_date"] - periods["start_date"]) / 2
+
+enrollments = pd.DataFrame({
+    "code"      : ["sp27", "fa26", "su26", "fa25", "sp26", "su27"],
+    "enrollment": [7100, 8200, 3400, 8000, 6900, 3200],
+})
+```
+
+### Join and sort
+
+```{python py-join}
+df = (enrollments
+      .merge(periods, on="code", how="left")
+      .sort_values("sort_key")
+      .reset_index(drop=True))
+
+df[["name", "sort_key", "enrollment", "mid_date"]]
+```
+
+### Discrete axis — ordered Categorical
+
+Setting `name` as an ordered `Categorical` whose categories follow `sort_key`
+controls axis order in seaborn and matplotlib:
+
+```{python py-discrete}
+df["name"] = pd.Categorical(
+    df["name"],
+    categories=df["name"].unique(),   # already in sort_key order
+    ordered=True
+)
+
+fig, ax = plt.subplots(figsize=(9, 4))
+sns.barplot(data=df, x="name", y="enrollment", color="steelblue", ax=ax)
+ax.set_xlabel("")
+ax.set_ylabel("Enrollment")
+ax.set_title("Discrete axis — ordered Categorical")
+plt.xticks(rotation=20, ha="right")
+plt.tight_layout()
+plt.show()
+```
+
+### Continuous date axis
+
+```{python py-continuous}
+fig, ax = plt.subplots(figsize=(9, 4))
+ax.plot(df["mid_date"], df["enrollment"], marker="o", color="steelblue")
+for _, row in df.iterrows():
+    ax.text(row["mid_date"], row["enrollment"] + 80,
+            row["name"], ha="center", va="bottom", fontsize=8)
+ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+ax.set_xlabel("")
+ax.set_ylabel("Enrollment")
+ax.set_title("Continuous date axis")
+plt.xticks(rotation=20, ha="right")
+plt.tight_layout()
+plt.show()
+```
+
+---
+
+## In SQL
+
+The period reference table lives in a database. Join at query time — results
+arrive pre-sorted with human-readable labels attached.
+
+```{r sql-setup}
+#| include: false
+library(DBI)
+library(duckdb)
+
+con <- dbConnect(duckdb())
+
+dbWriteTable(con, "periods", periods)
+dbWriteTable(con, "enrollments", enrollments[, c("code", "enrollment")])
+```
+
+```{sql}
+--| connection: con
+SELECT
+    p.name,
+    p.sort_key,
+    e.enrollment,
+    p.mid_date,
+    p.ay
+FROM enrollments e
+LEFT JOIN periods p ON e.code = p.code
+ORDER BY p.sort_key;
+```
+
+```{r sql-teardown}
+#| include: false
+dbDisconnect(con)
+```
+
+Downstream reporting tools that consume this query receive the data
+pre-sorted with `name` ready for display and `mid_date` ready for a date axis.
+
+---
+
+## In Excel
+
+Put the reference table on a dedicated sheet. Use **XLOOKUP** (Excel 365) or
+**VLOOKUP** (older versions) to pull `sort_key`, `name`, and `mid_date` into
+helper columns alongside your data. Always use `FALSE` (exact match) as the
+fourth VLOOKUP argument.
+
+```
+=XLOOKUP(A2, periods[code], periods[sort_key])
+=XLOOKUP(A2, periods[code], periods[name])
+=XLOOKUP(A2, periods[code], periods[mid_date])
+
+=VLOOKUP(A2, periods, 2, FALSE)   ' sort_key
+=VLOOKUP(A2, periods, 3, FALSE)   ' name
+```
+
+Sort the data sheet by `sort_key`. In the chart's Select Data dialog, point
+the horizontal axis labels at the `name` column. The chart displays
+"Fall 2026", "Spring 2027", etc. in chronological order.
+
+For a date axis, use `mid_date` as the series x-values and attach labels via
+**Format Data Labels → Value from Cells**, selecting the `name` column.
+
+See `excel-workarounds.md` in this folder for full detail on chart axis
+configuration.
+
+---
+
+## In Tableau
+
+Tableau offers two routes: a reference table join (preferred for production
+workbooks) and a calculated sort key (for self-contained workbooks).
+
+### Route 1 — Reference table relationship (preferred)
+
+Add both the fact table and the period reference table to the Data Source
+canvas. Define a **Relationship** between them on the period code field.
+Relationships preserve each table's level of detail and avoid row duplication
+from many-to-one joins.
+
+Once the `sort_key` field from the reference table is available, sort any
+dimension by it:
+
+1. Right-click the `name` dimension pill in the view → **Sort**
+2. Set **Sort By** to **Field**
+3. Select `sort_key`, Aggregation = **Minimum**, Order = **Ascending**
+
+The view shows `name` labels in chronological order; `sort_key` is never
+placed on the view.
+
+### Route 2 — Calculated sort key (self-contained)
+
+When no reference table is available, derive a numeric key from the label
+string using a calculated field. If labels follow a consistent format
+(`"Fall 2026"`, `"Spring 2027"`, etc.), an arithmetic derivation requires
+no manual updates as new periods are added:
+
+```
+// [Period Sort Key]  — works for any "Season YYYY" label
+INT(RIGHT([Period Label], 4)) * 10
++
+CASE LEFT([Period Label], 2)
+  WHEN "Fa" THEN 1
+  WHEN "Sp" THEN 2
+  WHEN "Su" THEN 3
+END
+```
+
+This produces 20261 for Fall 2026, 20262 for Spring 2027, 20263 for Summer
+2027, and so on — values that sort in chronological order automatically.
+
+Alternatively, a CASE expression maps each known period to an integer
+explicitly:
+
+```
+// [Period Sort Key]  — CASE version (requires manual update per period)
+CASE [Period Label]
+  WHEN "Fall 2025"   THEN 1
+  WHEN "Spring 2026" THEN 2
+  WHEN "Summer 2026" THEN 3
+  WHEN "Fall 2026"   THEN 4
+  WHEN "Spring 2027" THEN 5
+END
+```
+
+Apply the sort the same way as Route 1: right-click the label dimension →
+Sort → Field → select the calculated sort key.
+
+### Academic year grouping
+
+To assign raw dates to academic years, use a `DATEADD` shift that moves
+the year-start month to January, then extract the year:
+
+```
+// Academic year start year  (for a year starting in August)
+DATEPART("year", DATEADD("month", 5, [Activity Date]))
+```
+
+Shifting forward 5 months moves August (month 8) to January (month 1) of
+the following calendar year, so `DATEPART("year")` returns the correct
+academic year number. Build a label from that:
+
+```
+// Academic year label: "2026-27"
+STR(DATEPART("year", DATEADD("month", 5, [Activity Date])) - 1)
++ "-"
++ RIGHT(STR(DATEPART("year", DATEADD("month", 5, [Activity Date]))), 2)
+```
+
+---
+
+## What this approach does not solve
+
+The reference table must be built and maintained. Someone must define the
+period dates, compute the midpoints, and extend the table when new periods
+are added. The approach also does not prevent a colleague from sorting by the
+`name` column instead of `sort_key`, or from creating a chart before the join.
+
+These are coordination problems, not technical ones. The table approach makes
+correct behavior straightforward; it cannot make incorrect behavior impossible.
